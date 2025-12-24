@@ -1,0 +1,13 @@
+[project]
+name = "custom-beets-plugins"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "beets>=2.5.1",
+    "pyrekordbox>=0.4.4",
+]
+
+[tool.uv.sources]
+pyrekordbox = { git = "https://github.com/dylanljones/pyrekordbox.git", rev = "master" }
