@@ -20,8 +20,8 @@ class SourceMetadata(BeetsPlugin):
         )
         self.add_media_field("source", field)
 
-        if not hasattr(Item, 'source'): 
-            Item._types['source'] = types.STRING 
+        Item._types['source'] = types.STRING 
+        Item._fields['source'] = types.STRING
             
         # add default plugin configuration 
         self.config.add(
@@ -30,36 +30,45 @@ class SourceMetadata(BeetsPlugin):
                 "valid_sources": ["bandcamp", "soundcloud", "tidal", "unknown"] 
             })
 
-        # Hooks that ALWAYS run (including use-as-is)
-        self.register_listener("import_task_start", self.on_task_start)
-        self.register_listener("import_task_files", self.on_import_task_files)
+        self.import_stages = [self.imported]
 
-    def on_task_start(self, task, session):
+        # Hooks that ALWAYS run (including use-as-is)
+        self.register_listener("import_begin", self.on_import_begin)
+        # self.register_listener("import_task_files", self.on_import_task_files)
+        # self.register_listener("item_imported", self.on_item_imported)
+    
+    def on_import_begin(self, session):
         """
         Runs for *all* imports, including use-as-is.
         Resolve and validate source once per task.
         """
-        task.source = self._resolve_source()
+        session.source = self._resolve_source()
 
         self._log.warning(
-            f"Using source '{task.source}' for import task" 
+            f"Using source '{session.source}' for import task" 
         )
 
-    def on_import_task_files(self, task: ImportTask, session: ImportSession):
-        src = getattr(task, "source", None)
-        if not src:
+    def imported(self, session: ImportSession, task: ImportTask):
+        """
+        Runs for all imports, including use-as-is.
+        Resolve and validate source once per task.
+        Apply source to all items in task.
+        """
+        source = getattr(session, "source", None)
+        if not source:
+            self._log.error(f"no source on task")
             return
 
         # --- Apply source to items (DB + file tags) ---
         for item in task.items:
             # DB
-            item.source = src
+            item.source = source
             item.store()
 
             # File metadata
             file_path = item.path.decode("utf-8")
-            self.write_source_tag(file_path, src)
-    
+            self.write_source_tag(file_path, source)
+
     def _resolve_source(self):
         src = os.environ.get("BEETS_SOURCE") or self.config["default_source"].get()
 
@@ -84,15 +93,15 @@ class SourceMetadata(BeetsPlugin):
         without touching existing metadata.
         """
         try:
-            print(file_path)
             ext = os.path.splitext(file_path)[1].lower()
-            print(ext)
+            filename = os.path.basename(file_path)
             if ext == ".flac":
                 audio = FLAC(file_path)
                 audio["source"] = source
                 audio.save()
-                print(f"Applied source '{source}' to {file_path}")
+                self._log.info(f"Applied source '{source}' to {file_path}")
+                self._log.warning(f"Applied source '{source}' to {filename}")
             else:
-                print(f"Unsupported file type for {file_path}")
+                self._log.error(f"Unsupported file type for {filename}")
         except Exception as e:
-            print(f"Error writing source tag to {file_path}: {e}")
+            self._log.error(f"Error writing source tag to {file_path}: {e}")
