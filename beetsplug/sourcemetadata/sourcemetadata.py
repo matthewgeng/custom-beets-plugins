@@ -4,6 +4,11 @@ from beets.ui import UserError
 from beets.library import Item
 from beets.dbcore import types
 from mediafile import MediaField, MP3DescStorageStyle, StorageStyle
+from beets.importer import ImportTask, ImportSession
+from mutagen.flac import FLAC
+from mutagen.mp3 import MP3
+from mutagen.mp4 import MP4
+from mutagen.oggvorbis import OggVorbis
 
 class SourceMetadata(BeetsPlugin):
     def __init__(self):
@@ -40,7 +45,7 @@ class SourceMetadata(BeetsPlugin):
             f"Using source '{task.source}' for import task" 
         )
 
-    def on_import_task_files(self, task, session):
+    def on_import_task_files(self, task: ImportTask, session: ImportSession):
         src = getattr(task, "source", None)
         if not src:
             return
@@ -51,13 +56,9 @@ class SourceMetadata(BeetsPlugin):
             item.source = src
             item.store()
 
-            # FILE TAG (explicit override of use-as-is)
-            item["source"] = src
-            item.write()
-
-            self._log.warning(
-                f"Applied source '{src}' to {item.path}"
-            )
+            # File metadata
+            file_path = item.path.decode("utf-8")
+            self.write_source_tag(file_path, src)
     
     def _resolve_source(self):
         src = os.environ.get("BEETS_SOURCE") or self.config["default_source"].get()
@@ -76,3 +77,22 @@ class SourceMetadata(BeetsPlugin):
             )
 
         return src
+
+    def write_source_tag(self, file_path: str, source: str):
+        """
+        Writes a custom 'source' tag to any supported audio file type
+        without touching existing metadata.
+        """
+        try:
+            print(file_path)
+            ext = os.path.splitext(file_path)[1].lower()
+            print(ext)
+            if ext == ".flac":
+                audio = FLAC(file_path)
+                audio["source"] = source
+                audio.save()
+                print(f"Applied source '{source}' to {file_path}")
+            else:
+                print(f"Unsupported file type for {file_path}")
+        except Exception as e:
+            print(f"Error writing source tag to {file_path}: {e}")
