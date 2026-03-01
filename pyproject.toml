@@ -7,6 +7,9 @@ requires-python = ">=3.12"
 dependencies = [
     "beets>=2.5.1",
     "pyrekordbox>=0.4.4",
+    "beetcamp>=0.19.0",
+    "python3-discogs-client>=2.0.0",
+    "beets-copyartifacts3>=0.1.6",
 ]
 
 [tool.uv.sources]
