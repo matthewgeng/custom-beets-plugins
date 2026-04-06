@@ -12,5 +12,15 @@ dependencies = [
     "beets-copyartifacts3>=0.1.6",
 ]
 
+[tool.pytest.ini_options]
+testpaths = ["beetsplug"]
+python_files = ["test_*.py"]
+
 [tool.uv.sources]
 pyrekordbox = { git = "https://github.com/dylanljones/pyrekordbox.git", rev = "master" }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "responses>=0.26.0",
+]

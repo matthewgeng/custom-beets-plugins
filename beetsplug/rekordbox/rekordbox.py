@@ -100,12 +100,24 @@ class RekordboxDiff(BeetsPlugin):
         self._log.info("Loading Rekordbox playlists...")
         rb_db = self._open_db()
 
-        path_to_playlists = {}
+        # Resolve symlinks on rekordbox paths so alias paths match real library paths
+        real_path_to_playlists = {}
+        real_path_to_rb_title = {}
+
+        for c in rb_db.get_content():
+            folder_path = nfc(c.FolderPath or "")
+            if not folder_path:
+                continue
+            real = os.path.realpath(folder_path)
+            if c.Title:
+                real_path_to_rb_title[real] = nfc(c.Title)
+
         for ps in rb_db.get_playlist_songs():
             path = nfc(ps.Content.FolderPath) if ps.Content else None
             name = ps.Playlist.Name if ps.Playlist else None
             if path and name:
-                path_to_playlists.setdefault(path, []).append(name)
+                real = os.path.realpath(path)
+                real_path_to_playlists.setdefault(real, []).append(name)
 
         # Collect all enriched item dicts
         enriched = []
@@ -120,8 +132,13 @@ class RekordboxDiff(BeetsPlugin):
                 if isinstance(value, bytes):
                     data[key] = util.displayable_path(value)
 
-            path = nfc(item.path.decode("utf-8", errors="surrogateescape"))
-            data["rekordbox_playlists"] = sorted(path_to_playlists.get(path, []))
+            real_path = os.path.realpath(
+                item.path.decode("utf-8", errors="surrogateescape")
+            )
+            data["rekordbox"] = {
+                "title": real_path_to_rb_title.get(real_path),
+                "playlists": sorted(real_path_to_playlists.get(real_path, [])),
+            }
             enriched.append((item, data))
 
         if opts.export_dir is None:
@@ -144,6 +161,7 @@ class RekordboxDiff(BeetsPlugin):
             groups.setdefault(key, []).append(data)
 
         for key, items in groups.items():
+            items.sort(key=lambda d: (d.get("disc") or 0, d.get("track") or 0, d.get("title") or ""))
             kind = key[0]
             if kind == "album":
                 _, albumartist, album = key
@@ -154,7 +172,7 @@ class RekordboxDiff(BeetsPlugin):
 
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(items, f, indent=2, default=str)
+                json.dump(items, f, indent=2, default=str, sort_keys=True)
                 f.write("\n")
             self._log.info("Wrote {}", file_path)
 
